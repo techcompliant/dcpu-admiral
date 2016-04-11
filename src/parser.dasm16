@@ -718,6 +718,32 @@
     set ex, pop
     set pc, pop
 
+;----------------------------------------------------------------
+; void parser_skip_closure()
+;----------------------------------------------------------------
+:parser_skip_closure
+    set push, [lexer_token]
+    set push, [sp]
+    add [sp], 4
+    set push, 0
+
+:parser_skip_closure_loop
+    ife [lexer_token], [sp+2]
+        add [sp], 1
+    ife [lexer_token], [sp+1]
+        sub [sp], 1        
+
+    jsr lexer_next
+
+    ife [lexer_token], token_eof
+        jsr recover
+        #doc Missing parenthesis
+
+    ifn [sp], 0
+        set pc, parser_skip_closure_loop
+
+    set x, NONE
+    set pc, postamble
 
 ;----------------------------------------------------------------
 ; void parser_suite()
@@ -1166,11 +1192,14 @@
 ;----------------------------------------------------------------
 ; struct handle *led_and(struct handle *left)
 ;----------------------------------------------------------------
+:skipper dat BOOL_FALSE
+
 :led_and
     set push, 1
     set push, 1
     jsr preamble
 
+    set a, [lexer_token]
     jsr lexer_next
 
     ; evaluate left side
@@ -1182,10 +1211,14 @@
     jsr boolean
     set [z-1], x
 
+    ife x, BOOL_FALSE
+        set [skipper], BOOL_TRUE
+
     ; right side
-    set x, [lexer_token]
-    set push, [x + PROTOTYPE_LBP]        ; push for expression call
+    set push, [a + PROTOTYPE_LBP]        ; push for expression call
     jsr expression
+
+    set [skipper], BOOL_FALSE
 
     ife [z-1], BOOL_FALSE
         set pc, led_and__finish
@@ -1214,6 +1247,7 @@
     set push, 2
     jsr preamble
 
+    set a, [lexer_token]
     jsr lexer_next
 
     ; evaluate left side
@@ -1226,8 +1260,7 @@
     set [z-2], x
 
     ; right side
-    set x, [lexer_token]
-    set push, [x + PROTOTYPE_LBP]        ; push for expression call
+    set push, [a + PROTOTYPE_LBP]        ; push for expression call
     jsr expression
 
     ife [z-2], BOOL_TRUE
@@ -2073,6 +2106,9 @@
 ;----------------------------------------------------------------
     set pc, pop
 
+
+
+
 ;----------------------------------------------------------------
 ; struct handle *led_lbrack(struct handle *left)
 ;----------------------------------------------------------------
@@ -2080,6 +2116,9 @@
     set push, 1
     set push, 3
     jsr preamble
+
+    ife [skipper], BOOL_TRUE
+        set pc, parser_skip_closure
 
     jsr lexer_next            ; skip '['
 
